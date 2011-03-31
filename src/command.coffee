@@ -48,6 +48,7 @@ SWITCHES = [
 opts         = {}
 sources      = []
 contents     = []
+watching     = []
 optionParser = null
 
 # Run `coffee` by parsing passed options and determining what action to take.
@@ -66,6 +67,8 @@ exports.run = ->
   if opts.run
     opts.literals = sources.splice(1).concat opts.literals
   process.ARGV = process.argv = process.argv.slice(0, 2).concat opts.literals
+  if opts.watch
+    setInterval compileScripts, 10000
   compileScripts()
 
 # Asynchronously read in each CoffeeScript in a list of source files and
@@ -83,13 +86,14 @@ compileScripts = ->
               for file in files
                 compile path.join(source, file)
           else if topLevel or path.extname(source) is '.coffee'
+            seen = if opts.watch then watching.indexOf(source) isnt -1 else false
             fs.readFile source, (err, code) ->
               if opts.join
                 contents[sources.indexOf source] = code.toString()
                 compileJoin() if helpers.compact(contents).length is sources.length
               else
-                compileScript(source, code.toString(), base)
-            watch source, base if opts.watch and not opts.join
+                compileScript(source, code.toString(), base) if not seen
+            watch(source, base) if opts.watch and not opts.join and not seen
     compile source, true
 
 # Compile a single source script, containing the given code, according to the
@@ -144,6 +148,9 @@ loadRequires = ->
 # time the file is updated. May be used in combination with other options,
 # such as `--lint` or `--print`.
 watch = (source, base) ->
+  watching.push source
+  console.log watching
+  console.log "#{(new Date).toLocaleTimeString()} - watching #{source}"
   fs.watchFile source, {persistent: true, interval: 500}, (curr, prev) ->
     return if curr.size is prev.size and curr.mtime.getTime() is prev.mtime.getTime()
     fs.readFile source, (err, code) ->
